@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Terraform local artifacts and state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Build artifacts
+build/
+*.zip
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
