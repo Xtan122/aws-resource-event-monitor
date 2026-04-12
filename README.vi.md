@@ -2,159 +2,149 @@
 
 [English](README.md)
 
-AWS Resource Event Monitor là một pipeline giám sát sự kiện hạ tầng theo hướng serverless trên AWS: nhận sự kiện, chuẩn hóa dữ liệu, lưu state mới nhất, lưu archive và gửi cảnh báo.
+## Tóm Tắt Điều Hành
+AWS Resource Event Monitor là giải pháp giám sát hạ tầng AWS theo mô hình serverless, giúp thu thập sự kiện, chuẩn hóa dữ liệu, lưu trạng thái tài nguyên mới nhất, lưu trữ lịch sử sự kiện và gửi cảnh báo mức độ cao lên Slack.
 
-## Trang thai du an (cap nhat den 2026-04-13)
+Mục tiêu chính:
 
-Da hoan thanh:
+- Cung cấp khả năng quan sát gần thời gian thực về hành động vận hành và thay đổi trạng thái tài nguyên AWS trong phạm vi dịch vụ đã chọn.
 
-- Da trien khai va validate day du cac module ha tang (DynamoDB, Lambda, EventBridge, SNS, Slack integration).
-- Luong E2E cho su kien muc do cao da hoat dong:
-    - EventBridge -> Lambda -> DynamoDB/S3 -> SNS -> Amazon Q Developer trong ung dung chat -> Slack.
-- Da fix loi quan trong khong hien thi Slack bang cach doi payload SNS cua Lambda sang custom notification schema duoc ho tro.
+## Sơ Đồ Kiến Trúc
+![Sơ đồ kiến trúc AWS Resource Event Monitor](docs/aws-diagram.png)
 
-Con lai (cac cot moc tiep theo):
+## Phạm Vi Hiện Tại
+Các dịch vụ nằm trong phạm vi MVP:
 
-- Bai 37: chay va luu bang chung toi thieu 5 kich ban E2E critical.
-- Bai 27: bo sung DLQ cho Lambda.
-- Bai 28: bo sung CloudWatch Alarm (errors, throttles).
-- Bai 29: thiet lap CI/CD (GitHub Actions, workflow plan/apply co approve).
-- Bai 30: bo sung unit test va integration test.
+- EC2
+- S3
+- RDS
+- Lambda
+- IAM
+- VPC
+- ECS
 
-## Dự án này làm gì
+Nguồn sự kiện:
 
-- Nhận sự kiện từ EventBridge custom bus.
-- Xử lý sự kiện CloudTrail API và AWS Config change.
-- Chuẩn hóa payload trong Lambda.
-- Ghi state mới nhất vào DynamoDB.
-- Lưu raw/normalized payload vào S3 theo partition ngày.
-- Gửi cảnh báo mức độ cao qua SNS.
+- CloudTrail (hoạt động API)
+- AWS Config (thay đổi cấu hình/trạng thái tài nguyên)
 
-## Kiến trúc hiện tại
+## Kiến Trúc Tổng Quan
 
-- Event source: EventBridge rules cho CloudTrail và Config.
-- Compute: Lambda processor ([src/handlers/processor.py](src/handlers/processor.py)).
-- State store: DynamoDB (model PK/SK, item STATE#LATEST).
-- Archive store: S3 có versioning, SSE, block public access.
-- Notification: SNS topic ket hop Amazon Q Developer trong ung dung chat (ten cu: AWS Chatbot) de day canh bao sang Slack.
-- IaC: Terraform root + modules trong [infra](infra).
+- Ingestion: EventBridge nhận sự kiện từ CloudTrail và Config.
+- Processing: Lambda phân tích và chuẩn hóa dữ liệu sự kiện theo schema thống nhất.
+- Hot state: DynamoDB lưu trạng thái mới nhất cho từng tài nguyên (`pk/sk`, `STATE#LATEST`).
+- Cold archive: S3 lưu payload raw và normalized theo partition ngày.
+- Notification: SNS publish cảnh báo mức cao; Amazon Q Developer trong ứng dụng chat chuyển tiếp sang Slack.
 
-## Luồng xử lý
+## Luồng Xử Lý End-To-End
 
-1. EventBridge route event vào Lambda.
-2. Lambda detect event type (cloudtrail/config/unknown).
-3. Lambda build normalized payload schema v1.
-4. Lambda ghi state vào DynamoDB.
-5. Lambda lưu:
-   - raw/year=YYYY/month=MM/day=DD/event_id=....json
-   - normalized/year=YYYY/month=MM/day=DD/event_id=....json
-6. Lambda tinh severity va publish SNS cho HIGH/CRITICAL.
-7. Amazon Q Developer trong ung dung chat nhan tu SNS va day canh bao len kenh Slack.
+1. Một hành động trên dịch vụ AWS trong phạm vi giám sát xảy ra.
+2. CloudTrail/Config phát sinh sự kiện.
+3. EventBridge match rule và chuyển sự kiện sang Lambda.
+4. Lambda:
+   - Nhận diện loại sự kiện.
+   - Tạo payload chuẩn hóa (`schema_version: v1`).
+   - Ghi trạng thái mới nhất vào DynamoDB.
+   - Ghi bản raw + normalized vào S3.
+   - Tính severity.
+5. Nếu severity là `HIGH` hoặc `CRITICAL`, Lambda publish SNS.
+6. Amazon Q chat integration gửi cảnh báo vào kênh Slack đã cấu hình.
 
-## Reference quan trong cho loi gui Slack
+## Trạng Thái Dự Án (2026-04-13)
 
-Boi canh:
+Đã hoàn thành và xác thực:
 
-- Trieu chung: SNS publish thanh cong nhung Slack khong hien thi canh bao.
-- Nguyen nhan goc: Amazon Q chat integration tu choi message body SNS dang plain text, log bao "Event received is not supported".
+- Bộ module Terraform và wiring tại root.
+- Luồng xử lý Lambda và lưu trữ dữ liệu.
+- Routing EventBridge.
+- Đường gửi cảnh báo SNS -> Amazon Q -> Slack.
+- Bản vá lỗi quan trọng cho Slack delivery bằng custom notification schema hợp lệ.
 
-Ban fix da ap dung:
+Phần còn lại để đạt mức production-ready:
 
-- Lambda da publish theo custom notification schema duoc ho tro boi Amazon Q/AWS Chatbot (JSON gom version/source/id/content/metadata).
-- Logging level cua cau hinh chat da dat INFO de debug delivery de hon.
+- Bổ sung DLQ cho Lambda.
+- Bổ sung CloudWatch Alarm (errors, throttles).
+- Thiết lập CI/CD (GitHub Actions, flow plan/apply có approve).
+- Bổ sung unit test và integration test.
+- Mở rộng bộ kiểm thử E2E (tối thiểu 5 kịch bản critical).
 
-Code reference:
+## Ghi Chú Tương Thích Khi Gửi Slack
+Amazon Q chat integration không xử lý đúng với mọi payload SNS dạng text tự do trong luồng hiện tại.
 
-- Noi tao custom notification payload: [src/handlers/processor.py](src/handlers/processor.py)
-- Cau hinh kenh Slack Amazon Q va logging level: [infra/main.tf](infra/main.tf)
+Yêu cầu bắt buộc:
 
-Van hanh reference:
+- Lambda cần publish đúng custom notification JSON schema được hỗ trợ.
+- Nên bật logging cho chat integration để dễ điều tra sự cố.
 
-- Log group theo doi duong gui Slack: `/aws/chatbot/aws-resource-event-monitor-dev-alerts-slack`
-- Dau hieu thanh cong thuong gap trong log:
-    - `Successfully processed custom event`
-    - `Sending message to Slack`
+Log group vận hành:
 
-Tai lieu tham khao:
+- `/aws/chatbot/aws-resource-event-monitor-dev-alerts-slack`
 
-- Thong bao tinh nang custom notification: https://aws.amazon.com/about-aws/whats-new/2023/09/custom-notifications-aws-chatbot/
-- Ghi chu tuong thich service Chatbot (Amazon Q trong chat applications): https://docs.aws.amazon.com/chatbot/latest/adminguide/related-services.html
+Dấu hiệu thành công trong log:
 
-## Cấu trúc thư mục
+- `Successfully processed custom event`
+- `Sending message to Slack`
 
-- [infra](infra): Terraform root và module.
-- [infra/modules/dynamodb](infra/modules/dynamodb): module DynamoDB.
-- [infra/modules/lambda](infra/modules/lambda): module Lambda + IAM + log group.
-- [infra/modules/eventbridge](infra/modules/eventbridge): event bus, rules, targets, permissions.
-- [infra/modules/notifications](infra/modules/notifications): SNS topic và email subscription tùy chọn.
-- [src/handlers](src/handlers): source Lambda handlers.
-- [CHECKLIST_BAI_HOC.md](CHECKLIST_BAI_HOC.md): checklist bài học.
-- [CHAT_HISTORY.md](CHAT_HISTORY.md): lịch sử mentoring/làm việc.
+Tham chiếu triển khai:
 
-## Yêu cầu trước khi chạy
+- Logic tạo payload thông báo: [src/handlers/processor.py](src/handlers/processor.py)
+- Cấu hình integration Slack: [infra/main.tf](infra/main.tf)
 
-- Terraform >= 1.5 (khuyến nghị).
-- AWS CLI đã cấu hình account.
-- Python 3.12 (để đồng bộ với runtime Lambda).
+## Cấu Trúc Thư Mục
 
-## Deploy môi trường dev
+- [infra](infra): Cấu hình Terraform root.
+- [infra/modules/dynamodb](infra/modules/dynamodb): Module DynamoDB.
+- [infra/modules/lambda](infra/modules/lambda): Module Lambda và IAM.
+- [infra/modules/eventbridge](infra/modules/eventbridge): Event bus/rules/targets.
+- [infra/modules/notifications](infra/modules/notifications): SNS topic và subscription.
+- [src/handlers](src/handlers): Logic ứng dụng Lambda.
+- [docs](docs): Tài nguyên sơ đồ và tài liệu hỗ trợ.
 
-    cd infra
-    terraform init
-    terraform fmt -recursive
-    terraform validate
-    terraform plan -var-file=dev.tfvars
-    terraform apply -var-file=dev.tfvars
+## Điều Kiện Tiên Quyết
 
-## Output quan trọng
+- Terraform >= 1.5
+- AWS CLI đã cấu hình đúng account/region
+- Python 3.12
 
-Sau khi apply, Terraform trả ra:
+## Triển Khai Môi Trường Dev
+```bash
+cd infra
+terraform init
+terraform fmt -recursive
+terraform validate
+terraform plan -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
+```
 
-- archive_bucket_name
-- dynamodb_table_name
-- dynamodb_table_arn
-- sns_topic_arn
-- name_prefix
+## Output Quan Trọng
 
-## Hướng dẫn test end-to-end
+- `archive_bucket_name`
+- `dynamodb_table_name`
+- `dynamodb_table_arn`
+- `sns_topic_arn`
+- `name_prefix`
 
-Xem runbook tại [BAI25_E2E_TEST_BLOCK.md](BAI25_E2E_TEST_BLOCK.md).
+## Runbook Vận Hành (Kiểm Tra Nhanh)
 
-Trinh tu test khuyen nghi gan voi production:
+1. Tạo một sự kiện quản trị thực tế (ví dụ tạo/xóa S3 bucket).
+2. Kiểm tra log Lambda có dấu hiệu xử lý và publish SNS.
+3. Kiểm tra DynamoDB đã cập nhật `STATE#LATEST`.
+4. Kiểm tra S3 có thêm object mới ở cả raw và normalized.
+5. Kiểm tra log Amazon Q có dấu hiệu xử lý thành công và gửi Slack.
 
-1. Tao su kien management thuc te (vi du tao/xoa S3 bucket).
-2. Kiem tra log Lambda co dau hieu save state/archive va publish SNS.
-3. Kiem tra DynamoDB da cap nhat item STATE#LATEST cua resource.
-4. Kiem tra S3 da co object moi o nhanh raw va normalized.
-5. Kiem tra log Amazon Q co dau hieu:
-    - `Successfully processed custom event`
-    - `Sending message to Slack`
+## Ràng Buộc Đã Biết
 
-Lưu ý:
+- Khi test custom EventBridge event, `source` không được bắt đầu bằng `aws.`.
+- Tên resource phía Terraform provider vẫn dùng chuẩn `aws_chatbot_*`.
+- Khi destroy S3 bucket có versioning, cần dọn object versions trước.
 
-- Khi test put-events thủ công, dùng source custom.cloudtrail.
-- Custom event có source bắt đầu bằng aws. có thể bị EventBridge từ chối.
-- Can cau hinh Amazon Q Developer trong ung dung chat (ten cu: AWS Chatbot) subscribe vao SNS topic truoc khi test canh bao Slack.
+## Hủy Hạ Tầng (Tiết Kiệm Chi Phí)
+```bash
+cd infra
+terraform destroy -var-file=dev.tfvars
+```
 
-Luu y naming:
+## Ngôn Ngữ Tài Liệu
 
-- Trong Terraform, provider AWS van dung ten resource dang aws_chatbot_*.
-
-## Destroy để tiết kiệm chi phí
-
-    cd infra
-    terraform destroy -var-file=dev.tfvars
-
-Nếu bucket S3 không xóa được vì còn dữ liệu, cần xóa object versions/delete markers trước rồi destroy lại.
-
-## Gợi ý mô tả song ngữ EN/VI
-
-1. Dùng [README.md](README.md) làm bản chính tiếng Anh.
-2. Dùng [README.vi.md](README.vi.md) cho bản tiếng Việt đầy đủ.
-3. Đặt language switch link ở đầu 2 file.
-4. Giữ các mục kỹ thuật đồng bộ để tránh lệch thông tin:
-   - Overview
-   - Architecture
-   - Deploy
-   - Test
-   - Destroy
+- English: [README.md](README.md)
+- Tiếng Việt: [README.vi.md](README.vi.md)

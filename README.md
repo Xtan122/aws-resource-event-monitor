@@ -1,162 +1,150 @@
 # AWS Resource Event Monitor
 
-[Tieng Viet](README.vi.md)
+[Tiếng Việt](README.vi.md)
 
-AWS Resource Event Monitor is a serverless monitoring pipeline on AWS that captures infrastructure events, normalizes them, stores latest resource state, archives raw/normalized payloads, and publishes high-severity alerts.
+## Executive Summary
+AWS Resource Event Monitor is a serverless AWS monitoring solution that captures infrastructure events, normalizes event payloads, stores the latest resource state, archives event history, and sends high-severity alerts to Slack.
 
-## Project Status (As Of 2026-04-13)
+Primary objective:
 
-Completed:
+- Give operators near-real-time visibility into infrastructure actions and state changes for selected AWS services.
 
-- Infrastructure modules are deployed and validated (DynamoDB, Lambda, EventBridge, SNS, Slack integration).
-- End-to-end flow is working for high-severity events:
-	- EventBridge -> Lambda -> DynamoDB/S3 -> SNS -> Amazon Q Developer in chat applications -> Slack.
-- Critical Slack delivery issue has been resolved by switching Lambda SNS payloads to supported custom notification schema.
+## Architecture Diagram
+![AWS Resource Event Monitor Architecture](docs/aws-diagram.png)
 
-Remaining (next milestones):
+## Scope (Current)
+Monitored service scope for MVP:
 
-- B37: run and document at least 5 critical E2E scenarios.
-- B27: add DLQ for Lambda.
-- B28: add CloudWatch alarms (errors, throttles).
-- B29: set up CI/CD (GitHub Actions, plan/apply workflow with approval).
-- B30: add unit and integration tests.
+- EC2
+- S3
+- RDS
+- Lambda
+- IAM
+- VPC
+- ECS
 
-## What This Project Does
+Event sources:
 
-- Ingests events from EventBridge custom bus.
-- Handles CloudTrail API events and AWS Config change events.
-- Normalizes event payloads in Lambda.
-- Writes latest resource state to DynamoDB.
-- Archives raw and normalized payloads to S3 (date-based partition).
-- Publishes high-severity alerts to SNS.
+- CloudTrail (API activity)
+- AWS Config (resource configuration/status changes)
 
-## Current Architecture
+## High-Level Architecture
 
-- Event source: EventBridge rules for CloudTrail and Config patterns.
-- Compute: Lambda processor ([src/handlers/processor.py](src/handlers/processor.py)).
-- State store: DynamoDB table (PK/SK model, latest state item).
-- Archive store: S3 bucket with versioning, SSE, and public access block.
-- Notifications: SNS topic with Amazon Q Developer in chat applications (formerly AWS Chatbot) to deliver alerts to Slack.
-- Infrastructure as Code: Terraform root + reusable modules in [infra](infra).
+- Ingestion: EventBridge rules receive CloudTrail and Config events.
+- Processing: Lambda parses and normalizes events into a common schema.
+- Hot state: DynamoDB stores latest state per resource (`pk/sk`, `STATE#LATEST`).
+- Cold archive: S3 stores raw and normalized event payloads, partitioned by date.
+- Notification: SNS publishes high-severity events; Amazon Q Developer in chat applications delivers to Slack.
 
-## Event Processing Flow
+## End-to-End Event Flow
 
-1. EventBridge routes matched events to Lambda.
-2. Lambda detects event type (cloudtrail/config/unknown).
-3. Lambda builds normalized schema v1 payload.
-4. Lambda writes latest state to DynamoDB.
-5. Lambda writes:
-   - raw/year=YYYY/month=MM/day=DD/event_id=....json
-   - normalized/year=YYYY/month=MM/day=DD/event_id=....json
-6. Lambda calculates severity and publishes SNS for HIGH/CRITICAL events.
-7. Amazon Q Developer in chat applications forwards SNS alerts to Slack channel.
+1. A monitored AWS service action occurs.
+2. CloudTrail/Config emits event data.
+3. EventBridge matches and forwards event to Lambda.
+4. Lambda:
+   - Detects event type.
+   - Builds normalized payload (`schema_version: v1`).
+   - Writes latest state to DynamoDB.
+   - Writes raw + normalized JSON to S3.
+   - Calculates severity.
+5. If severity is `HIGH` or `CRITICAL`, Lambda publishes SNS.
+6. Amazon Q chat integration forwards alert message to Slack.
 
-## Critical Slack Delivery Fix Reference
+## Project Status (2026-04-13)
 
-Background:
+Implemented and validated:
 
-- Symptom: SNS publish succeeded but Slack channel did not show alert messages.
-- Root cause: Amazon Q chat integration rejected plain SNS notification bodies with "Event received is not supported".
+- Core Terraform modules and root composition.
+- Lambda processing logic and persistence.
+- EventBridge routing.
+- SNS + Slack integration path.
+- Critical Slack delivery fix using supported custom notification schema.
 
-Fix implemented:
+Remaining work (production readiness):
 
-- Lambda now publishes Amazon Q/AWS Chatbot custom notification schema (JSON with version/source/id/content/metadata).
-- Chat configuration logging level is set to INFO for easier delivery diagnostics.
+- DLQ for Lambda.
+- CloudWatch alarms (errors, throttles).
+- CI/CD pipeline (GitHub Actions with approval flow).
+- Unit tests and integration tests.
+- Broader E2E scenario pack (minimum 5 critical scenarios).
 
-Code references:
+## Slack Delivery Compatibility Note
+Amazon Q chat integration does not accept arbitrary plain-text SNS bodies for this flow.
 
-- Custom notification payload construction: [src/handlers/processor.py](src/handlers/processor.py)
-- Amazon Q Slack channel configuration and logging level: [infra/main.tf](infra/main.tf)
+Required approach:
 
-Operational references:
+- Publish supported custom notification JSON schema from Lambda.
+- Keep chat integration logging enabled for troubleshooting.
 
-- Amazon Q service logs for Slack delivery path: `/aws/chatbot/aws-resource-event-monitor-dev-alerts-slack`
-- Typical success markers in logs:
-	- `Successfully processed custom event`
-	- `Sending message to Slack`
+Operational log group:
 
-External references:
+- `/aws/chatbot/aws-resource-event-monitor-dev-alerts-slack`
 
-- Custom notifications announcement: https://aws.amazon.com/about-aws/whats-new/2023/09/custom-notifications-aws-chatbot/
-- Chatbot (Amazon Q in chat applications) service compatibility notes: https://docs.aws.amazon.com/chatbot/latest/adminguide/related-services.html
+Success markers:
 
-## Repository Layout
+- `Successfully processed custom event`
+- `Sending message to Slack`
 
-- [infra](infra): Terraform root and modules.
+Implementation references:
+
+- Lambda payload format logic: [src/handlers/processor.py](src/handlers/processor.py)
+- Slack chat integration config: [infra/main.tf](infra/main.tf)
+
+## Repository Structure
+
+- [infra](infra): Terraform root configuration.
 - [infra/modules/dynamodb](infra/modules/dynamodb): DynamoDB module.
-- [infra/modules/lambda](infra/modules/lambda): Lambda + IAM + log group.
-- [infra/modules/eventbridge](infra/modules/eventbridge): Event bus, rules, targets, invoke permissions.
-- [infra/modules/notifications](infra/modules/notifications): SNS topic and optional email subscription.
-- [src/handlers](src/handlers): Lambda handlers.
-- [CHECKLIST_BAI_HOC.md](CHECKLIST_BAI_HOC.md): lesson checklist and progress.
-- [CHAT_HISTORY.md](CHAT_HISTORY.md): mentoring/work history.
+- [infra/modules/lambda](infra/modules/lambda): Lambda deployment and IAM.
+- [infra/modules/eventbridge](infra/modules/eventbridge): Event bus/rules/targets.
+- [infra/modules/notifications](infra/modules/notifications): SNS topic and subscriptions.
+- [src/handlers](src/handlers): Lambda application logic.
+- [docs](docs): Architecture assets and supporting documentation.
 
 ## Prerequisites
 
-- Terraform >= 1.5 (recommended).
-- AWS CLI configured for your target account.
-- Python 3.12 (for Lambda runtime parity and local script checks).
+- Terraform >= 1.5
+- AWS CLI configured for target account/region
+- Python 3.12
 
-## Deploy (Dev)
+## Deployment (Dev)
+```bash
+cd infra
+terraform init
+terraform fmt -recursive
+terraform validate
+terraform plan -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
+```
 
-	cd infra
-	terraform init
-	terraform fmt -recursive
-	terraform validate
-	terraform plan -var-file=dev.tfvars
-	terraform apply -var-file=dev.tfvars
+## Key Outputs
 
-## Useful Outputs
+- `archive_bucket_name`
+- `dynamodb_table_name`
+- `dynamodb_table_arn`
+- `sns_topic_arn`
+- `name_prefix`
 
-After apply, Terraform exposes:
+## Operations Runbook (Quick Validation)
 
-- archive_bucket_name
-- dynamodb_table_name
-- dynamodb_table_arn
-- sns_topic_arn
-- name_prefix
+1. Trigger a real AWS management event (for example, create/delete an S3 bucket).
+2. Verify Lambda logs show processing and SNS publish.
+3. Verify DynamoDB `STATE#LATEST` is updated.
+4. Verify S3 contains new raw and normalized records.
+5. Verify Amazon Q log group shows successful processing and Slack dispatch.
 
-## End-to-End Test Guide
+## Known Constraints
 
-Use the runbook in [BAI25_E2E_TEST_BLOCK.md](BAI25_E2E_TEST_BLOCK.md).
-
-Recommended production-like test sequence:
-
-1. Trigger a real management event (for example create/delete an S3 bucket).
-2. Verify Lambda logs contain state/archive markers and SNS publish marker.
-3. Verify DynamoDB has updated STATE#LATEST item for the resource.
-4. Verify S3 has new raw and normalized objects.
-5. Verify Amazon Q chat log group contains:
-	- `Successfully processed custom event`
-	- `Sending message to Slack`
-
-Important note:
-
-- For manual put-events testing, use source custom.cloudtrail.
-- Using source starting with aws. in custom events can be rejected by EventBridge.
-- Configure Amazon Q Developer in chat applications (formerly AWS Chatbot) to subscribe to the deployed SNS topic before running Slack alert tests.
-
-Naming note:
-
-- In Terraform, AWS provider resources still use names like aws_chatbot_slack_channel_configuration.
+- Custom EventBridge test events must not use `source` prefix `aws.`.
+- Terraform AWS provider naming for chat resources remains `aws_chatbot_*`.
+- S3 versioned bucket deletion requires object version cleanup before destroy.
 
 ## Destroy (Cost Control)
+```bash
+cd infra
+terraform destroy -var-file=dev.tfvars
+```
 
-	cd infra
-	terraform destroy -var-file=dev.tfvars
+## Language
 
-If S3 bucket deletion fails because the bucket is not empty, delete object versions/delete markers first, then run destroy again.
-
-## Bilingual Documentation Recommendation
-
-If you want both English and Vietnamese docs:
-
-1. Keep [README.md](README.md) as the primary English entry point.
-2. Keep full Vietnamese version in [README.vi.md](README.vi.md).
-3. Add language switch links at the top of both files.
-4. Keep technical sections mirrored to avoid drift:
-   - Overview
-   - Architecture
-   - Deploy
-   - Test
-   - Destroy
+- English: [README.md](README.md)
+- Vietnamese: [README.vi.md](README.vi.md)
