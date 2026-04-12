@@ -76,6 +76,7 @@ resource "aws_iam_role_policy" "lambda_data_write_policy" {
           var.dynamodb_table_arn
         ]
       },
+
       {
         Action = [
           "s3:PutObject"
@@ -84,7 +85,7 @@ resource "aws_iam_role_policy" "lambda_data_write_policy" {
         Resource = [
           "${var.archive_bucket_arn}/*"
         ]
-      }
+      },
     ]
   })
 }
@@ -103,6 +104,8 @@ resource "aws_lambda_function" "resource_state" {
   handler          = var.handler
   source_code_hash = var.source_code_hash
   runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
 
   environment {
     variables = var.environment_variables

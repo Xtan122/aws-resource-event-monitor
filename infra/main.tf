@@ -5,6 +5,7 @@ locals {
     Project     = var.project_name
     Environment = var.environment
     ManagedBy   = "Terraform"
+
   }
 }
 
@@ -85,6 +86,43 @@ module "notifications" {
   source       = "./modules/notifications"
   topic_name   = "${local.name_prefix}-alerts"
   email_target = null # for development
+
+  tags = local.common_tags
+}
+
+# notifications to Slack via Amazon Q Developer in chat applications
+# (Terraform AWS provider resource name remains aws_chatbot_*).
+resource "aws_iam_role" "chatbot_role" {
+  name = "${local.name_prefix}-chatbot-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "chatbot.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "chatbot_readonly" {
+  role       = aws_iam_role.chatbot_role.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+resource "aws_chatbot_slack_channel_configuration" "alerts_slack" {
+  configuration_name = "${local.name_prefix}-alerts-slack"
+  iam_role_arn       = aws_iam_role.chatbot_role.arn
+
+  slack_team_id    = var.slack_team_id
+  slack_channel_id = var.slack_channel_id
+
+  sns_topic_arns = [module.notifications.topic_arn]
+  logging_level  = "INFO"
 
   tags = local.common_tags
 }

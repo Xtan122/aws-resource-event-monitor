@@ -13,3 +13,10 @@ variable "environment" {
   type        = string
 }
 
+variable "slack_team_id" {
+  type = string
+}
+
+variable "slack_channel_id" {
+  type = string
+}

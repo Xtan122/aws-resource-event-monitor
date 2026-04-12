@@ -10,3 +10,4 @@ resource "aws_sns_topic_subscription" "sns_topic_subcription" {
   protocol  = "email"
   endpoint  = var.email_target
 }
+

@@ -222,15 +222,39 @@ def publish_to_sns(payload):
 
     else:
         severity = calculate_severity(payload)
-        message = {
-            "default": json.dumps(payload, ensure_ascii=False),
-            "severity": severity
+        event_id = payload.get("event_id", "unknown")
+        service = payload.get("service", "unknown")
+        action = payload.get("action", "unknown")
+        actor = payload.get("actor", "unknown")
+        resource_id = payload.get("resource_id", "unknown")
+        event_time = payload.get("event_time", "unknown")
+
+        custom_notification = {
+            "version": "1.0",
+            "source": "custom",
+            "id": str(event_id),
+            "content": {
+                "textType": "client-markdown",
+                "title": f"[{severity}] {service}:{action}",
+                "description": (
+                    f"*Severity:* {severity}\n"
+                    f"*Service:* {service}\n"
+                    f"*Action:* {action}\n"
+                    f"*Resource:* {resource_id}\n"
+                    f"*Actor:* {actor}\n"
+                    f"*Event Time:* {event_time}"
+                )
+            },
+            "metadata": {
+                "summary": f"{severity} event for {service}",
+                "eventType": "monitoring"
+            }
         }
+
         try:
             sns_client.publish(
                 TopicArn=topic_arn,
-                Message=json.dumps(message),
-                Subject=f"AWS Resource Event - {payload.get('service', 'unknown')}"
+                Message=json.dumps(custom_notification, ensure_ascii=False)
             )
             logger.info(f"Event published to SNS topic: {topic_arn}")
         except ClientError as e:

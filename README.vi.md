@@ -4,6 +4,23 @@
 
 AWS Resource Event Monitor là một pipeline giám sát sự kiện hạ tầng theo hướng serverless trên AWS: nhận sự kiện, chuẩn hóa dữ liệu, lưu state mới nhất, lưu archive và gửi cảnh báo.
 
+## Trang thai du an (cap nhat den 2026-04-13)
+
+Da hoan thanh:
+
+- Da trien khai va validate day du cac module ha tang (DynamoDB, Lambda, EventBridge, SNS, Slack integration).
+- Luong E2E cho su kien muc do cao da hoat dong:
+    - EventBridge -> Lambda -> DynamoDB/S3 -> SNS -> Amazon Q Developer trong ung dung chat -> Slack.
+- Da fix loi quan trong khong hien thi Slack bang cach doi payload SNS cua Lambda sang custom notification schema duoc ho tro.
+
+Con lai (cac cot moc tiep theo):
+
+- Bai 37: chay va luu bang chung toi thieu 5 kich ban E2E critical.
+- Bai 27: bo sung DLQ cho Lambda.
+- Bai 28: bo sung CloudWatch Alarm (errors, throttles).
+- Bai 29: thiet lap CI/CD (GitHub Actions, workflow plan/apply co approve).
+- Bai 30: bo sung unit test va integration test.
+
 ## Dự án này làm gì
 
 - Nhận sự kiện từ EventBridge custom bus.
@@ -19,7 +36,7 @@ AWS Resource Event Monitor là một pipeline giám sát sự kiện hạ tầng
 - Compute: Lambda processor ([src/handlers/processor.py](src/handlers/processor.py)).
 - State store: DynamoDB (model PK/SK, item STATE#LATEST).
 - Archive store: S3 có versioning, SSE, block public access.
-- Notification: SNS topic để publish alert.
+- Notification: SNS topic ket hop Amazon Q Developer trong ung dung chat (ten cu: AWS Chatbot) de day canh bao sang Slack.
 - IaC: Terraform root + modules trong [infra](infra).
 
 ## Luồng xử lý
@@ -31,7 +48,37 @@ AWS Resource Event Monitor là một pipeline giám sát sự kiện hạ tầng
 5. Lambda lưu:
    - raw/year=YYYY/month=MM/day=DD/event_id=....json
    - normalized/year=YYYY/month=MM/day=DD/event_id=....json
-6. Lambda tính severity và publish SNS cho HIGH/CRITICAL.
+6. Lambda tinh severity va publish SNS cho HIGH/CRITICAL.
+7. Amazon Q Developer trong ung dung chat nhan tu SNS va day canh bao len kenh Slack.
+
+## Reference quan trong cho loi gui Slack
+
+Boi canh:
+
+- Trieu chung: SNS publish thanh cong nhung Slack khong hien thi canh bao.
+- Nguyen nhan goc: Amazon Q chat integration tu choi message body SNS dang plain text, log bao "Event received is not supported".
+
+Ban fix da ap dung:
+
+- Lambda da publish theo custom notification schema duoc ho tro boi Amazon Q/AWS Chatbot (JSON gom version/source/id/content/metadata).
+- Logging level cua cau hinh chat da dat INFO de debug delivery de hon.
+
+Code reference:
+
+- Noi tao custom notification payload: [src/handlers/processor.py](src/handlers/processor.py)
+- Cau hinh kenh Slack Amazon Q va logging level: [infra/main.tf](infra/main.tf)
+
+Van hanh reference:
+
+- Log group theo doi duong gui Slack: `/aws/chatbot/aws-resource-event-monitor-dev-alerts-slack`
+- Dau hieu thanh cong thuong gap trong log:
+    - `Successfully processed custom event`
+    - `Sending message to Slack`
+
+Tai lieu tham khao:
+
+- Thong bao tinh nang custom notification: https://aws.amazon.com/about-aws/whats-new/2023/09/custom-notifications-aws-chatbot/
+- Ghi chu tuong thich service Chatbot (Amazon Q trong chat applications): https://docs.aws.amazon.com/chatbot/latest/adminguide/related-services.html
 
 ## Cấu trúc thư mục
 
@@ -73,10 +120,25 @@ Sau khi apply, Terraform trả ra:
 
 Xem runbook tại [BAI25_E2E_TEST_BLOCK.md](BAI25_E2E_TEST_BLOCK.md).
 
+Trinh tu test khuyen nghi gan voi production:
+
+1. Tao su kien management thuc te (vi du tao/xoa S3 bucket).
+2. Kiem tra log Lambda co dau hieu save state/archive va publish SNS.
+3. Kiem tra DynamoDB da cap nhat item STATE#LATEST cua resource.
+4. Kiem tra S3 da co object moi o nhanh raw va normalized.
+5. Kiem tra log Amazon Q co dau hieu:
+    - `Successfully processed custom event`
+    - `Sending message to Slack`
+
 Lưu ý:
 
 - Khi test put-events thủ công, dùng source custom.cloudtrail.
 - Custom event có source bắt đầu bằng aws. có thể bị EventBridge từ chối.
+- Can cau hinh Amazon Q Developer trong ung dung chat (ten cu: AWS Chatbot) subscribe vao SNS topic truoc khi test canh bao Slack.
+
+Luu y naming:
+
+- Trong Terraform, provider AWS van dung ten resource dang aws_chatbot_*.
 
 ## Destroy để tiết kiệm chi phí
 

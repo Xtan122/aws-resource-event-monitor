@@ -20,3 +20,8 @@ build/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# Keep only top-level README markdown files tracked
+**/*.md
+!/README.md
+!/README.vi.md
