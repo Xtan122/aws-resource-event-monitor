@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36">
   <diagram id="Ht1M8jgEwFfnCIfOTk4-" name="Page-1">
-    <mxGraphModel dx="2575" dy="1475" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="2575" dy="1475" grid="0" gridSize="10" guides="0" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" background="#ffffff" math="0" shadow="0">
       <root>
         <object label="" id="0">
           <mxCell />
@@ -239,6 +239,9 @@
         </mxCell>
         <mxCell id="A9JM-fYkV-R1LamUvEUv-67" parent="A9JM-fYkV-R1LamUvEUv-68" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontStyle=1" value="Slack" vertex="1">
           <mxGeometry height="30" width="60" x="1.1368683772161603e-13" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Pm-Eao86CX1ome_tkcsq-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#d3d3d3;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="1151" width="1642" x="6" y="8" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
