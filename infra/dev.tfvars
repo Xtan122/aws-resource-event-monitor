@@ -1,5 +1,5 @@
 project_name     = "aws-resource-event-monitor"
 environment      = "dev"
 aws_region       = "us-east-1"
-slack_team_id    = "T0ASCGES4SE"
-slack_channel_id = "C0AT6QEJ20Y"
+slack_team_id    = "MY_SLACK_TEAM_ID"
+slack_channel_id = "MY_SLACK_CHANNEL_ID"
