@@ -50,7 +50,7 @@ Event sources:
 5. If severity is `HIGH` or `CRITICAL`, Lambda publishes SNS.
 6. Amazon Q chat integration forwards alert message to Slack.
 
-## Project Status (2026-04-13)
+## Project Status (2026-04-14)
 
 Implemented and validated:
 
@@ -67,6 +67,53 @@ Remaining work (production readiness):
 - CI/CD pipeline (GitHub Actions with approval flow).
 - Unit tests and integration tests.
 - Broader E2E scenario pack (minimum 5 critical scenarios).
+
+## Cost Baseline (Dev, us-east-1)
+
+Reference model (detailed): [cost_calculate.md](cost_calculate.md)
+
+Monthly estimate for current workload (~200 resources, ~15,000 events/month):
+
+| Service | Estimated Cost/Month | Cost Driver |
+|---|---:|---|
+| AWS Config | ~$3.00 | Configuration items recorded |
+| Amazon S3 | ~$0.15 | PUT requests + object storage |
+| Amazon SNS | ~$0.03 | Email deliveries |
+| Amazon EventBridge | ~$0.02 | Custom event bus traffic |
+| Amazon CloudWatch Logs | ~$0.04 | Lambda + EventBridge logs |
+| AWS Lambda | ~$0.00 | Covered by free tier for current volume |
+| DynamoDB | ~$0.00 | Covered by free tier for current volume |
+| CloudTrail | $0.00 | Management events baseline |
+| Amazon Q / Chatbot | $0.00 | Chat integration baseline |
+| IAM | $0.00 | No direct service charge |
+| **Total** | **~$3.24/month** | **Dev baseline** |
+
+Annualized dev baseline: **~$38.88/year**.
+
+Production sizing assumption from the same model: **~$17.82/month**.
+
+Calculation method clarification:
+
+- This is a scenario-based estimate per service, not a direct multiplier from dev total.
+- Event-driven services are modeled with higher traffic, while AWS Config is modeled with higher monitored resource count.
+- Production total is calculated as the sum of service-level assumptions:
+   - Lambda (0.07) + DynamoDB (0.40) + S3 (1.50) + EventBridge (0.15) + SNS (0.30) + CloudWatch Logs (0.40) + AWS Config (15.00) = **17.82 USD/month**.
+- Source table: Dev vs Production in [cost_calculate.md](cost_calculate.md).
+
+## FinOps And Governance Recommendations
+
+- Treat AWS Config as the primary cost risk (dominant share of spend in current baseline).
+- Restrict AWS Config recording scope to required resource types instead of recording all resource types.
+- Reduce EventBridge logging level to `ERROR` in production; keep `TRACE` for active troubleshooting windows only.
+- Add S3 lifecycle transitions for long-term archives (for example, Glacier after 90 days).
+- Define monthly budget alarms and anomaly detection for Config, S3, and CloudWatch Logs.
+- Track cost KPIs in operations review: cost per 1,000 events and cost per monitored resource.
+
+## Cost Review Cadence
+
+- Refresh cost assumptions monthly or after major architecture changes.
+- Rebaseline immediately when adding new monitored services, Config rules, or high-volume event sources.
+- Keep pricing references region-specific (this estimate targets `us-east-1`).
 
 ## Slack Delivery Compatibility Note
 Amazon Q chat integration does not accept arbitrary plain-text SNS bodies for this flow.
