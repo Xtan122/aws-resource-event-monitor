@@ -25,6 +25,7 @@ Thumbs.db
 **/*.md
 !/README.md
 !/README.vi.md
+!/cost_calculate.md
 
 
 slack.txt
